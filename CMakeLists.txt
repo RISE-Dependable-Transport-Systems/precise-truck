@@ -63,7 +63,6 @@ add_executable(RCTruck
     WayWise/sensors/imu/bno055orientationupdater.cpp
     WayWise/sensors/imu/imuorientationupdater.cpp
     WayWise/vehicles/carstate.cpp
-    WayWise/vehicles/vehiclelighting.cpp
     WayWise/vehicles/controller/carmovementcontroller.cpp
     WayWise/vehicles/controller/motorcontroller.h
     WayWise/vehicles/controller/movementcontroller.cpp

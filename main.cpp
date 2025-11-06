@@ -19,8 +19,6 @@
 #include "WayWise/communication/mavsdkvehicleserver.h"
 #include "WayWise/communication/parameterserver.h"
 #include "WayWise/logger/logger.h"
-#include "WayWise/vehicles/vehiclelighting.h"
-#include "WayWise/autopilot/followpoint.h"
 
 static void terminationSignalHandler(int signal) {
     qDebug() << "Shutting down";
@@ -98,16 +96,6 @@ int main(int argc, char *argv[])
     else
         qDebug() << "RtcmClient: not connected";
 
-    // TODO: re-add feature for MAVLink-based communication
-    // -- In case RControlStation sends RTCM data, RtcmClient is disabled (RTCM from RControlStation has priority)
-//    QObject::connect(&mPacketIFServer, &PacketInterfaceTCPServer::rtcmData, [&](){
-//        qDebug() << "PacketInterfaceTCPServer: got RTCM data, disabling on-vehicle RTCM client.";
-//        rtcmClient.disconnect();
-//        QObject::disconnect(&rtcmClient, &RtcmClient::rtcmData, mUbloxRover.get(), &UbloxRover::writeRtcmToUblox);
-//        QObject::disconnect(&rtcmClient, &RtcmClient::baseStationPosition, mUbloxRover.get(), &UbloxRover::setEnuRef);
-//        QObject::disconnect(&mPacketIFServer, &PacketInterfaceTCPServer::rtcmData, nullptr, nullptr); // run this slot only once
-//    });
-
     // IMU
     bool useVESCIMU = true;
     QSharedPointer<IMUOrientationUpdater> mIMUOrientationUpdater;
@@ -120,60 +108,21 @@ int main(int argc, char *argv[])
     // Odometry
     QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, &positionFuser, &SDVPVehiclePositionFuser::correctPositionAndYawOdom);
 
-    // TODO: input to u-blox disabled for now, seems to cause problems (lost fusion mode on F9R) and needs testing/debugging
-//    QObject::connect(mVESCMotorController.get(), &VESCMotorController::gotStatusValues, [&](double rpm, int tachometer, int tachometer_abs){
-//       Q_UNUSED(rpm)
-//       uint32_t ticks = tachometer_abs;
-//       uint32_t wheelTickMax = 8388607;
-//       ticks &=  wheelTickMax; // Bits 31..23 are set to zero
-
-//       static int previousTachometer = 0;
-//       bool direction = ((tachometer - previousTachometer) > previousTachometer);
-//       ticks |= direction << 23;
-
-//       mUbloxRover->writeOdoToUblox(SINGLE_TICK,ticks);
-
-//       previousTachometer = tachometer;
-//    });
-
     // --- Autopilot ---
     QSharedPointer<PurepursuitWaypointFollower> mWaypointFollower(new PurepursuitWaypointFollower(mCarMovementController));
     mWaypointFollower->setPurePursuitRadius(1.0);
     mWaypointFollower->setRepeatRoute(false);
     mWaypointFollower->setAdaptivePurePursuitRadiusActive(true);
 
-    // --- Follow Point ---
-    QSharedPointer<FollowPoint> mFollowPoint(new FollowPoint(mCarMovementController));
-
-    // DepthAI Camera
-    DepthAiCamera mDepthAiCamera;
-    QObject::connect(&mDepthAiCamera, &DepthAiCamera::closestObject, mFollowPoint.get(), &FollowPoint::updatePointToFollowInVehicleFrame);
-
-    // Emergency brake
-    EmergencyBrake mEmergencyBrake;
-    QObject::connect(&mDepthAiCamera, &DepthAiCamera::closestObject, &mEmergencyBrake, &EmergencyBrake::brakeForDetectedCameraObject);
-    QObject::connect(mWaypointFollower.get(), &WaypointFollower::deactivateEmergencyBrake, &mEmergencyBrake, &EmergencyBrake::deactivateEmergencyBrake);
-    QObject::connect(mWaypointFollower.get(), &WaypointFollower::activateEmergencyBrake, &mEmergencyBrake, &EmergencyBrake::activateEmergencyBrake);
-    QObject::connect(mFollowPoint.get(), &FollowPoint::deactivateEmergencyBrake, &mEmergencyBrake, &EmergencyBrake::deactivateEmergencyBrake);
-    QObject::connect(mFollowPoint.get(), &FollowPoint::activateEmergencyBrake, &mEmergencyBrake, &EmergencyBrake::activateEmergencyBrake);
-
-    QObject::connect(&mEmergencyBrake, &EmergencyBrake::emergencyBrake, mWaypointFollower.get(), &WaypointFollower::stop);
-
-    // Vehicle lighting
-    QSharedPointer<VehicleLighting> mVehicleLighting(new VehicleLighting(mCarState));
-
     // Setup MAVLINK communication towards ControlTower
     mavsdkVehicleServer.setMovementController(mCarMovementController);
     mavsdkVehicleServer.setUbloxRover(mUbloxRover);
     mavsdkVehicleServer.setWaypointFollower(mWaypointFollower);
-    mavsdkVehicleServer.setFollowPoint(mFollowPoint);
-    // TODO: motor controller status not supported in ControlTower
 
     // Advertise parameters
     mCarState->provideParametersToParameterServer();
     mavsdkVehicleServer.provideParametersToParameterServer();
     mWaypointFollower->provideParametersToParameterServer();
-    mFollowPoint->provideParametersToParameterServer();
 
     // Watchdog that warns when EventLoop is slowed down
     SimpleWatchdog watchdog;
