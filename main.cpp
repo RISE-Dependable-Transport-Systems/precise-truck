@@ -31,6 +31,20 @@ static void terminationSignalHandler(int signal) {
         qApp->quit();
 }
 
+// Example sinusoidal perturbation function for waywise gnss simulation
+// auto sinusoidalGnssPerturbationFn = [](QTime simTime, QSharedPointer<VehicleState> vehicleState) {
+//     PosPoint gnssPosition = vehicleState->getPosition(PosType::GNSS);
+//     double t = (simTime.msecsSinceStartOfDay() % 100000) / 1000.0; // seconds, wrap every 100s
+
+//     gnssPosition.setX(gnssPosition.getX() + 0.005 * std::sin(t * 1.0));
+//     gnssPosition.setY(gnssPosition.getY() + 0.005 * std::sin(t * 2.0));
+//     gnssPosition.setYaw(gnssPosition.getYaw() + 0.2 * std::sin(t * 0.5));
+
+//     vehicleState->setPosition(gnssPosition);
+//     return true;
+// };
+
+
 // ----------------------------------------------------
 // Config struct to hold all settings
 // ----------------------------------------------------
@@ -230,6 +244,19 @@ int main(int argc, char *argv[])
                 mGNSSReceiver = mUbloxRover;
             }
         }
+    }
+
+    if (!mGNSSReceiver) {
+        qDebug() << "No GNSS receiver connected. Simulating GNSS data.";
+        mGNSSReceiver.reset(new GNSSReceiver(mTruckState));
+        mGNSSReceiver->setReceiverVariant(RECEIVER_VARIANT::WAYWISE_SIMULATED);
+        mGNSSReceiver->setReceiverState(RECEIVER_STATE::READY);
+
+        QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, [&](QSharedPointer<VehicleState> vehicleState, double distanceDriven){
+            // bool fused = mGNSSReceiver->simulationStep(sinusoidalGnssPerturbationFn);
+            bool fused = mGNSSReceiver->simulationStep();
+            positionFuser.correctPositionAndYawGNSS(vehicleState, distanceDriven, fused);
+        });
     }
 
     // IMU
