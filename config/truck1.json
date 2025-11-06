@@ -1,0 +1,23 @@
+{
+  "truck_id": 1,
+  "trailer_id": 25,
+  "attach_trailer": true,
+  "truck_length": 0.55,
+  "truck_width": 0.22,
+  "trailer_length": 0.95,
+  "trailer_width": 0.20,
+  "trailer_wheelbase": 0.64,
+  "axis_distance": 0.3,
+  "turn_radius": 0.67,
+  "servo_center": 0.5,
+  "servo_range": 0.50,
+  "angle_sensor_offset": 94.043,
+  "pure_pursuit_radius": 1.0,
+  "adaptive_radius": true,
+  "repeat_route": false,
+  "use_vesc_imu": true,
+  "update_period_ms": 25,
+  "control_tower_ip": "127.0.0.1",
+  "control_tower_port": 14540,
+  "rtcm_info_file": "./rtcmServerInfo.txt"
+}

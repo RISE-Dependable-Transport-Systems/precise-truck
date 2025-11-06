@@ -51,6 +51,10 @@ add_executable(RCTruck
     WayWise/core/vbytearray.cpp
     WayWise/core/geometry.h
     WayWise/external/pi-bno055/i2c_bno055.c
+    WayWise/external/pi-as5600/driver_as5600.c
+    WayWise/external/pi-as5600/iic.c
+    WayWise/external/pi-as5600/driver_as5600_basic.c
+    WayWise/external/pi-as5600/raspberrypi4b_driver_as5600_interface.c
     WayWise/external/vesc/vescpacket.cpp
     WayWise/sensors/camera/depthaicamera.cpp
     WayWise/sensors/camera/gimbal.h
@@ -62,6 +66,8 @@ add_executable(RCTruck
     WayWise/sensors/gnss/gnssreceiver.cpp
     WayWise/sensors/imu/bno055orientationupdater.cpp
     WayWise/sensors/imu/imuorientationupdater.cpp
+    WayWise/sensors/angle/as5600updater.cpp
+    WayWise/sensors/angle/anglesensorupdater.cpp
     WayWise/vehicles/carstate.cpp
     WayWise/vehicles/controller/carmovementcontroller.cpp
     WayWise/vehicles/controller/motorcontroller.h
@@ -70,6 +76,8 @@ add_executable(RCTruck
     WayWise/vehicles/controller/vescmotorcontroller.cpp
     WayWise/vehicles/objectstate.cpp
     WayWise/vehicles/vehiclestate.cpp
+    WayWise/vehicles/truckstate.cpp
+    WayWise/vehicles/trailerstate.cpp
     WayWise/logger/logger.cpp
     main.cpp
 )
