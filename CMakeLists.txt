@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(RCCar LANGUAGES CXX C)
+project(RCTruck LANGUAGES CXX C)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -34,7 +34,7 @@ endif()
 find_package(Qt5 COMPONENTS Core Network SerialPort REQUIRED)
 find_package(MAVSDK REQUIRED)
 
-add_executable(RCCar
+add_executable(RCTruck
     WayWise/autopilot/purepursuitwaypointfollower.cpp
     WayWise/autopilot/purepursuitwaypointfollower.h
     WayWise/autopilot/waypointfollower.h
@@ -75,9 +75,9 @@ add_executable(RCCar
     main.cpp
 )
 
-target_include_directories(RCCar PRIVATE WayWise/)
+target_include_directories(RCTruck PRIVATE WayWise/)
 
-target_link_libraries(RCCar
+target_link_libraries(RCTruck
     PRIVATE Qt5::Network
     PRIVATE Qt5::SerialPort
     PRIVATE MAVSDK::mavsdk
