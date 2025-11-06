@@ -24,12 +24,27 @@
 #include "WayWise/sensors/angle/as5600updater.h"
 #include "WayWise/vehicles/truckstate.h"
 #include "WayWise/vehicles/trailerstate.h"
+#include "WayWise/routeplanning/routeutils.h"
 
 static void terminationSignalHandler(int signal) {
     qDebug() << "Shutting down";
     if (signal==SIGINT || signal==SIGTERM || signal==SIGQUIT || signal==SIGHUP)
         qApp->quit();
 }
+
+// Example sinusoidal perturbation function for waywise gnss simulation
+auto sinusoidalGnssPerturbationFn = [](QTime simTime, QSharedPointer<VehicleState> vehicleState) {
+    PosPoint gnssPosition = vehicleState->getPosition(PosType::GNSS);
+    double t = (simTime.msecsSinceStartOfDay() % 100000) / 1000.0; // seconds, wrap every 100s
+
+    gnssPosition.setX(gnssPosition.getX() + 0.5 * std::sin(t * 1.0));
+    gnssPosition.setY(gnssPosition.getY() + 0.5 * std::sin(t * 2.0));
+    gnssPosition.setYaw(gnssPosition.getYaw() + 0.2 * std::sin(t * 0.5));
+
+    vehicleState->setPosition(gnssPosition);
+    return true;
+};
+
 
 // ----------------------------------------------------
 // Config struct to hold all settings
@@ -60,6 +75,9 @@ struct TruckConfig {
     QString controlTowerIP = "127.0.0.1";
     int controlTowerPort = 14540;
     QString rtcmInfoFile = "./rtcmServerInfo.txt";
+    QString speedLimitRegionsFilePath = "";
+    QString enuRef = "57.7171924432987, 12.962759215969157, 0.0";
+    QString routeFilePath = "";
 };
 
 // ----------------------------------------------------
@@ -97,6 +115,9 @@ TruckConfig loadConfigFromJson(const QString &path)
             config.controlTowerIP = obj.value("control_tower_ip").toString(config.controlTowerIP);
             config.controlTowerPort = obj.value("control_tower_port").toInt(config.controlTowerPort);
             config.rtcmInfoFile = obj.value("rtcm_info_file").toString(config.rtcmInfoFile);
+            config.speedLimitRegionsFilePath = obj.value("speed_limit_regions_file_path").toString(config.speedLimitRegionsFilePath);
+            config.enuRef = obj.value("enu_ref").toString(config.enuRef);
+            config.routeFilePath = obj.value("route_file_path").toString(config.routeFilePath);
         }
     }
     return config;
@@ -159,6 +180,13 @@ int main(int argc, char *argv[])
     mTruckState->setWidth(config.truckWidth);
     mTruckState->setAxisDistance(config.axisDistance);
     mTruckState->setMaxSteeringAngle(atan(config.axisDistance / config.turnRadius));
+    QStringList parts = config.enuRef.split(",");
+    if (parts.size() == 3) {
+        double lat = parts[0].toDouble();
+        double lon = parts[1].toDouble();
+        double alt = parts[2].toDouble();
+        mTruckState->setEnuRef({lat, lon, alt});
+    }
 
     QSharedPointer<TrailerState> mTrailerState;
     if (config.attachTrailer) {
@@ -221,7 +249,7 @@ int main(int argc, char *argv[])
                 RtcmClient rtcmClient;
                 QObject::connect(mUbloxRover.get(), &UbloxRover::gotNmeaGga, &rtcmClient, &RtcmClient::forwardNmeaGgaToServer);
                 QObject::connect(&rtcmClient, &RtcmClient::rtcmData, mUbloxRover.get(), &UbloxRover::writeRtcmToUblox);
-                QObject::connect(&rtcmClient, &RtcmClient::baseStationPosition, mUbloxRover.get(), &UbloxRover::setEnuRef);
+                QObject::connect(&rtcmClient, &RtcmClient::baseStationPosition, mTruckState.get(), &TruckState::setEnuRef);
                 if (rtcmClient.connectWithInfoFromFile(config.rtcmInfoFile))
                     qDebug() << "RtcmClient: connected to" << QString(rtcmClient.getCurrentHost()+ ":" + QString::number(rtcmClient.getCurrentPort()));
                 else
@@ -230,6 +258,19 @@ int main(int argc, char *argv[])
                 mGNSSReceiver = mUbloxRover;
             }
         }
+    }
+
+    if (!mGNSSReceiver) {
+        qDebug() << "No GNSS receiver connected. Simulating GNSS data.";
+        mGNSSReceiver.reset(new GNSSReceiver(mTruckState));
+        mGNSSReceiver->setReceiverVariant(RECEIVER_VARIANT::WAYWISE_SIMULATED);
+        mGNSSReceiver->setReceiverState(RECEIVER_STATE::READY);
+
+        QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, [&](QSharedPointer<VehicleState> vehicleState, double distanceDriven){
+            bool fused = mGNSSReceiver->simulationStep(sinusoidalGnssPerturbationFn);
+            // bool fused = mGNSSReceiver->simulationStep();
+            positionFuser.correctPositionAndYawGNSS(vehicleState, distanceDriven, fused);
+        });
     }
 
     // IMU
@@ -254,6 +295,16 @@ int main(int argc, char *argv[])
     mWaypointFollower->setRepeatRoute(config.repeatRoute);
     mWaypointFollower->setAdaptivePurePursuitRadiusActive(config.adaptiveRadius);
 
+    mWaypointFollower->loadSpeedLimitRegionsFile(config.speedLimitRegionsFilePath);
+
+    QObject::connect(mTruckState.get(), &TruckState::updatedEnuReference, [&](llh_t mEnuReference) {
+        Q_UNUSED(mEnuReference)
+        qInfo() << "New ENU reference received, reloading speed limit regions.";
+
+        mWaypointFollower->clearSpeedLimitRegions();
+        mWaypointFollower->loadSpeedLimitRegionsFile(config.speedLimitRegionsFilePath);
+    });
+
     // Setup MAVLINK communication towards ControlTower
     mavsdkVehicleServer.setMovementController(mCarMovementController);
     mavsdkVehicleServer.setWaypointFollower(mWaypointFollower);
@@ -268,6 +319,28 @@ int main(int argc, char *argv[])
 
     // Watchdog that warns when EventLoop is slowed down
     SimpleWatchdog watchdog;
+
+    // --- Print speed every second ---
+    QTimer *speedTimer = new QTimer();
+    QObject::connect(speedTimer, &QTimer::timeout, [&]() {
+        double speed = mTruckState->getSpeed();
+        qInfo() << "Speed:" << speed * 3.6 << "kmph";
+    });
+    speedTimer->start(1000);
+
+    // Read route and start waypoint follower after 2 seconds
+    QTimer::singleShot(2000, [&]() {
+        if (mTruckState->getSpeed() < 0.1) {
+            qInfo() << "Reading route from file: " << config.routeFilePath << " using ENU reference: " << mTruckState->getEnuRef().latitude << ", " << mTruckState->getEnuRef().longitude << ", " << mTruckState->getEnuRef().height;
+            QList<PosPoint> waypointList = readRouteFromFile(config.routeFilePath, mTruckState->getEnuRef());
+
+            mWaypointFollower->clearRoute();
+            mWaypointFollower->resetState();
+            mWaypointFollower->addRoute(waypointList);
+            mWaypointFollower->startFollowingRoute(false);
+            qDebug() << "Started waypoint follower with a route of " << waypointList.size() << " waypoints";
+        }
+    });
 
     // Perform safe shutdown
     signal(SIGINT, terminationSignalHandler);
