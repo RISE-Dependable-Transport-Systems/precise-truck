@@ -10,10 +10,11 @@ Note: Latest MAVSDK 2.x is required (support for version 3.x is not yet availabl
     sudo dpkg -i libmavsdk-dev*.deb
 
     sudo apt install git build-essential cmake libqt5serialport5-dev libgpiod-dev
-    git clone git@github.com:RISE-Dependable-Transport-Systems/precise-truck.git
+    mkdir src && cd src
+    git clone git@github.com:RISE-Dependable-Transport-Systems/precise-truck.git precise-truck
     cd precise-truck
     git submodule update --init
-    cd ..
+    cd ../../
     mkdir build && cd build
     cmake ../src/precise-truck
     make -j4
