@@ -1,2 +1,11 @@
-*.user
+tools/MAVSDK
 
+# Build folders
+build
+
+# VS Code files
+*.vscode
+
+# Downloaded binaries
+*.deb
+*.rpm
