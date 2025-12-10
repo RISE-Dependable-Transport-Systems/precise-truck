@@ -2,3 +2,8 @@
 build/
 .vscode/
 log/
+tools/MAVSDK
+
+# Downloaded binaries
+*.deb
+*.rpm

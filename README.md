@@ -86,3 +86,33 @@ From the build directory:
 # Override truck ID and attach trailer
 ./RCTruck -c ../config/truck1.json -i 2 -l 26 -a
 ```
+
+## 🐳 Docker Container
+
+PRECISE Truck can be run inside a Docker container for convenient development and testing.
+
+From the project root directory:
+
+```bash
+docker build -t precise-truck:latest .
+```
+
+Run the RCTruck (from any directory) using a JSON configuration file:
+
+```bash
+docker run --rm --network host precise-truck:latest ./RCTruck --config ../config/truck1.json
+```
+
+### Resetting State for Chaos Experiments
+
+The container is designed to be **stateless** - no persistent volumes are used by default. To reset the system state and start clean:
+
+```bash
+# Stop the running container
+docker stop precise-truck
+
+# Start a fresh instance
+docker run --rm --name precise-truck --network host precise-truck:latest ./RCTruck --config ../config/truck1.json
+```
+
+Each container restart provides a completely clean environment, ideal for repeatable chaos engineering experiments.
