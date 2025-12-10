@@ -56,6 +56,8 @@ add_executable(RCTruck
     WayWise/external/pi-as5600/driver_as5600_basic.c
     WayWise/external/pi-as5600/raspberrypi4b_driver_as5600_interface.c
     WayWise/external/vesc/vescpacket.cpp
+    WayWise/routeplanning/routeutils.cpp
+    WayWise/routeplanning/routeutils.h
     WayWise/sensors/camera/depthaicamera.cpp
     WayWise/sensors/camera/gimbal.h
     WayWise/sensors/fusion/sdvpvehiclepositionfuser.cpp
