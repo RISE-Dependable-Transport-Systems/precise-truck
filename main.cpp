@@ -358,14 +358,26 @@ int main(int argc, char *argv[])
 
     // Read route and start waypoint follower after 2 seconds
     QTimer::singleShot(2000, [&]() {
-        if (mTruckState->getSpeed() < 0.1 && config.routeFilePath != "") {
-            qInfo() << "Reading route from file: " << config.routeFilePath << " using ENU reference: " << mTruckState->getEnuRef().latitude << ", " << mTruckState->getEnuRef().longitude << ", " << mTruckState->getEnuRef().height;
+        if (mTruckState->getSpeed() < 0.1 && !config.routeFilePath.isEmpty()) {
+
+            if (!QFile::exists(config.routeFilePath)) {
+                qWarning() << "Route file does not exist:" << config.routeFilePath;
+                return;
+            }
+
+            qInfo() << "Reading route from file:" << config.routeFilePath
+                    << "using ENU reference:"
+                    << mTruckState->getEnuRef().latitude << ","
+                    << mTruckState->getEnuRef().longitude << ","
+                    << mTruckState->getEnuRef().height;
+
             QList<PosPoint> waypointList = readRouteFromFile(config.routeFilePath, mTruckState->getEnuRef());
 
             mWaypointFollower->clearRoute();
             mWaypointFollower->resetState();
             mWaypointFollower->addRoute(waypointList);
             mWaypointFollower->startFollowingRoute(false);
+
             qDebug() << "Started waypoint follower with a route of " << waypointList.size() << " waypoints";
         }
     });
