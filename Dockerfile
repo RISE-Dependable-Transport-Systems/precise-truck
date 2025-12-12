@@ -64,8 +64,8 @@ RUN ldconfig
 RUN useradd -m -s /bin/bash rctruck
 
 # Copy built executables
-COPY --from=builder /precise-truck/build/RCTruck /home/rctruck/build/
-RUN chown -R rctruck:rctruck /home/rctruck/build
+COPY --from=builder /precise-truck/build/RCTruck /home/rctruck/
+RUN chown -R rctruck:rctruck /home/rctruck/
 
 # Copy configuration files from project
 COPY --from=builder /precise-truck/config /home/rctruck/config
@@ -73,7 +73,7 @@ RUN chown -R rctruck:rctruck /home/rctruck/config
 
 # Set user and working directory
 USER rctruck
-WORKDIR /home/rctruck/build
+WORKDIR /home/rctruck
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="PRECISE Truck"

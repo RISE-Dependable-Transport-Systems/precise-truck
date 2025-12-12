@@ -26,45 +26,56 @@ Clone the repository in any directory (workspace) and build:
 git clone git@github.com:RISE-Dependable-Transport-Systems/precise-truck.git precise-truck
 cd precise-truck
 git submodule update --init
-mkdir build && cd build
-cmake ..
-make -j4
+cmake -S . -B build
+make -C build -j
 ```
 
 ## Running the Truck
 
-To run the truck, simply run the `RCTruck` executable in the build directory:
+If the build is successful, an `RCTruck` executable will be created in the `build` directory. You can run it from the project root using:
 
 ```bash
-./RCTruck
+./build/RCTruck
 ```
 
 The RCTruck has a range of parameters configurable using a JSON file:
 
-| Parameter             | Type     | Default                  | Description                                                         |
-| --------------------- | -------- | ------------------------ | ------------------------------------------------------------------- |
-| `truck_id`            | `int`    | `1`                      | Unique ID for the truck.                                            |
-| `trailer_id`          | `int`    | `25`                     | Unique ID for the trailer.                                          |
-| `attach_trailer`      | `bool`   | `false`                  | Whether to attach the trailer to the truck.                         |
-| `truck_length`        | `double` | `0.5`                    | Length of the truck in meters.                                      |
-| `truck_width`         | `double` | `0.21`                   | Width of the truck in meters.                                       |
-| `trailer_length`      | `double` | `0.96`                   | Length of the trailer in meters.                                    |
-| `trailer_width`       | `double` | `0.21`                   | Width of the trailer in meters.                                     |
-| `trailer_wheelbase`   | `double` | `0.64`                   | Distance between trailer axles.                                     |
-| `axis_distance`       | `double` | `0.3`                    | Distance between the truck’s front and rear axles.                  |
-| `turn_radius`         | `double` | `0.67`                   | Turning radius of the truck.                                        |
-| `servo_center`        | `double` | `0.5`                    | Servo neutral position (normalized).                                |
-| `servo_range`         | `double` | `0.5`                    | Servo motion range (normalized).                                    |
-| `angle_sensor_offset` | `double` | `90.0`                   | Calibration offset for the steering angle sensor (degrees).         |
-| `pure_pursuit_radius` | `double` | `1.0`                    | Default lookahead distance for the Pure Pursuit algorithm (meters). |
-| `speed_to_rpm_factor` | `double` | `5190`                   | Conversion factor between target speed and motor RPM.               |
-| `adaptive_radius`     | `bool`   | `true`                   | Enables adaptive Pure Pursuit radius.                               |
-| `repeat_route`        | `bool`   | `false`                  | Whether the vehicle repeats the waypoint route automatically.       |
-| `use_vesc_imu`        | `bool`   | `true`                   | Use VESC’s onboard IMU instead of external BNO055.                  |
-| `update_period_ms`    | `int`    | `25`                     | Period (in milliseconds) for vehicle state updates.                 |
-| `control_tower_ip`    | `string` | `"127.0.0.1"`            | IP address of the MAVSDK Control Tower.                             |
-| `control_tower_port`  | `int`    | `14540`                  | UDP port for MAVSDK Control Tower connection.                       |
-| `rtcm_info_file`      | `string` | `"./rtcmServerInfo.txt"` | Path to RTCM correction server configuration file.                  |
+| Parameter                         | Type     | Default                                       | Description                                                         |
+| --------------------------------- | -------- | --------------------------------------------- | ------------------------------------------------------------------- |
+| `truck_id`                        | `int`    | `1`                                           | Unique ID for the truck.                                            |
+| `trailer_id`                      | `int`    | `25`                                          | Unique ID for the trailer.                                          |
+| `attach_trailer`                  | `bool`   | `false`                                       | Whether to attach the trailer to the truck.                         |
+| `truck_length`                    | `double` | `0.5`                                         | Length of the truck in meters.                                      |
+| `truck_width`                     | `double` | `0.21`                                        | Width of the truck in meters.                                       |
+| `trailer_length`                  | `double` | `0.96`                                        | Length of the trailer in meters.                                    |
+| `trailer_width`                   | `double` | `0.21`                                        | Width of the trailer in meters.                                     |
+| `trailer_wheelbase`               | `double` | `0.64`                                        | Distance between trailer axles.                                     |
+| `axis_distance`                   | `double` | `0.3`                                         | Distance between the truck’s front and rear axles.                  |
+| `turn_radius`                     | `double` | `0.67`                                        | Turning radius of the truck.                                        |
+| `servo_center`                    | `double` | `0.5`                                         | Servo neutral position (normalized).                                |
+| `servo_range`                     | `double` | `0.5`                                         | Servo motion range (normalized).                                    |
+| `angle_sensor_offset`             | `double` | `90.0`                                        | Calibration offset for the steering angle sensor (degrees).         |
+| `pure_pursuit_radius`             | `double` | `1.0`                                         | Default lookahead distance for the Pure Pursuit algorithm (meters). |
+| `speed_to_rpm_factor`             | `double` | `5190`                                        | Conversion factor between target speed and motor RPM.               |
+| `adaptive_radius`                 | `bool`   | `true`                                        | Enables adaptive Pure Pursuit radius.                               |
+| `repeat_route`                    | `bool`   | `false`                                       | Whether the vehicle repeats the waypoint route automatically.       |
+| `use_vesc_imu`                    | `bool`   | `true`                                        | Use VESC’s onboard IMU instead of external BNO055.                  |
+| `update_period_ms`                | `int`    | `25`                                          | Period (in milliseconds) for vehicle state updates.                 |
+| `control_tower_ip`                | `string` | `"127.0.0.1"`                                 | IP address of the MAVSDK Control Tower.                             |
+| `control_tower_port`              | `int`    | `14540`                                       | UDP port for MAVSDK Control Tower connection.                       |
+| `route_file_path`                 | `string` | `""`                                          | Path to RTCM correction server configuration file.                  |
+| `speed_limit_regions_file_path`   | `string` | `""`                                          | Path to JSON file defining speed limit regions.                     |
+| `enu_ref`                         | `string` | `"57.7171924432987, 12.962759215969157, 0.0"` | ENU reference coordinates: latitude, longitude, altitude.           |
+| `route_file_path`                 | `string` | `""`                                          | Path to the waypoint route XML file.                                |
+| `gnss_simulation_noise_sigma_pos` | `double` | `0.0`                                         | GNSS simulation positional noise standard deviation (meters).       |
+| `gnss_simulation_noise_sigma_vel` | `double` | `0.0`                                         | GNSS simulation velocity noise standard deviation (m/s).            |
+| `log_directory_path`              | `string` | `""`                                          | Directory where log files will be created.                          |
+
+> **Note on file paths:**
+> Paths specified in the JSON configuration (e.g., `rtcm_info_file_path`, `speed_limit_regions_file_path`, `route_file_path`, `log_directory_path`) can be either **absolute** or **relative**.
+>
+> - If relative, they are interpreted **relative to the project root** when running a binary compiled in a normal build environment.
+> - If the binary is run in a Docker container or from another environment where the project root is not available, relative paths are interpreted **relative to the executable location**.
 
 In addition to providing path to a JSON configuration file, command-line arguments can be used to override the truck and trailer IDs and flag to attach the trailer using the following options:
 
@@ -77,14 +88,14 @@ In addition to providing path to a JSON configuration file, command-line argumen
 
 #### Example Usage of Command-line Arguments
 
-From the build directory:
+From the project root directory:
 
 ```bash
 # Use a JSON configuration file
-./RCTruck --config ../config/truck1.json
+./build/RCTruck --config config/truck1.json
 
 # Override truck ID and attach trailer
-./RCTruck -c ../config/truck1.json -i 2 -l 26 -a
+./build/RCTruck -c config/truck1.json -i 2 -l 26 -a
 ```
 
 ## 🐳 Docker Container
@@ -100,7 +111,7 @@ docker build -t precise-truck:latest .
 Run the RCTruck (from any directory) using a JSON configuration file:
 
 ```bash
-docker run --rm --network host precise-truck:latest ./RCTruck --config ../config/truck1.json
+docker run --rm --network host precise-truck:latest ./RCTruck --config config/truck1.json
 ```
 
 ### Resetting State for Chaos Experiments
@@ -112,7 +123,7 @@ The container is designed to be **stateless** - no persistent volumes are used b
 docker stop precise-truck
 
 # Start a fresh instance
-docker run --rm --name precise-truck --network host precise-truck:latest ./RCTruck --config ../config/truck1.json
+docker run --rm --name precise-truck --network host precise-truck:latest ./RCTruck --config config/truck1.json
 ```
 
 Each container restart provides a completely clean environment, ideal for repeatable chaos engineering experiments.

@@ -92,3 +92,5 @@ target_link_libraries(RCTruck
     PRIVATE MAVSDK::mavsdk
     PRIVATE gpiodcxx
 )
+
+add_definitions(-DPROJECT_ROOT="${CMAKE_SOURCE_DIR}")

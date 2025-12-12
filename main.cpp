@@ -28,6 +28,9 @@
 #include "WayWise/routeplanning/routeutils.h"
 #include <QDir>
 #include <QStandardPaths>
+#include <unistd.h>
+#include <limits.h>
+#include <string>
 
 static void terminationSignalHandler(int signal) {
     qDebug() << "Shutting down";
@@ -60,6 +63,42 @@ auto gaussianGnssPerturbationFn =
     return true;
 };
 
+// Get executable directory
+std::string getExecutableDir() {
+    char buffer[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+    if (len != -1) {
+        buffer[len] = '\0';
+        std::string fullPath(buffer);
+        return fullPath.substr(0, fullPath.find_last_of('/'));
+    }
+    return ".";
+}
+
+// Determine base path: PROJECT_ROOT if exists, otherwise exec dir
+QString determineBasePath() {
+#ifdef PROJECT_ROOT
+    QDir projectRoot(QString(PROJECT_ROOT));
+    if (projectRoot.exists())
+        return projectRoot.absolutePath();
+#endif
+    return QString::fromStdString(getExecutableDir());
+}
+
+QString fixPath(const QString &path, const QString &basePath)
+{
+    if (path.isEmpty())
+        return "";
+
+    QFileInfo fi(path);
+    if (fi.isAbsolute()) {
+        return fi.absoluteFilePath();
+    } else {
+        QDir base(basePath);
+        return base.absoluteFilePath(path);
+    }
+}
+
 // ----------------------------------------------------
 // Config struct to hold all settings
 // ----------------------------------------------------
@@ -88,12 +127,13 @@ struct TruckConfig {
     int updateVehicleStatePeriodMs = 25;
     QString controlTowerIP = "127.0.0.1";
     int controlTowerPort = 14540;
-    QString rtcmInfoFile = "./rtcmServerInfo.txt";
+    QString rtcmInfoFilePath = "";
     QString speedLimitRegionsFilePath = "";
     QString enuRef = "57.7171924432987, 12.962759215969157, 0.0";
     QString routeFilePath = "";
     double gnssSimulationNoiseSigmaPos = 0.0; // meters
     double gnssSimulationNoiseSigmaYaw = 0.0; // radians
+    QString logDirectoryPath = "";   // if empty, Documents directory (OS agnostic) is used
 };
 
 // ----------------------------------------------------
@@ -130,12 +170,13 @@ TruckConfig loadConfigFromJson(const QString &path)
             config.updateVehicleStatePeriodMs = obj.value("update_period_ms").toInt(config.updateVehicleStatePeriodMs);
             config.controlTowerIP = obj.value("control_tower_ip").toString(config.controlTowerIP);
             config.controlTowerPort = obj.value("control_tower_port").toInt(config.controlTowerPort);
-            config.rtcmInfoFile = obj.value("rtcm_info_file").toString(config.rtcmInfoFile);
+            config.rtcmInfoFilePath = obj.value("rtcm_info_file_path").toString(config.rtcmInfoFilePath);
             config.speedLimitRegionsFilePath = obj.value("speed_limit_regions_file_path").toString(config.speedLimitRegionsFilePath);
             config.enuRef = obj.value("enu_ref").toString(config.enuRef);
             config.routeFilePath = obj.value("route_file_path").toString(config.routeFilePath);
             config.gnssSimulationNoiseSigmaPos = obj.value("gnss_simulation_noise_sigma_pos").toDouble(config.gnssSimulationNoiseSigmaPos);
             config.gnssSimulationNoiseSigmaYaw = obj.value("gnss_simulation_noise_sigma_yaw").toDouble(config.gnssSimulationNoiseSigmaYaw);
+            config.logDirectoryPath = obj.value("log_directory_path").toString(config.logDirectoryPath);
         }
     }
     return config;
@@ -175,6 +216,13 @@ TruckConfig parseArguments(QCoreApplication &app)
 
     if (parser.isSet(attachTrailerOption))
         config.attachTrailer = true;
+
+    QString basePath = determineBasePath();
+
+    config.rtcmInfoFilePath = fixPath(config.rtcmInfoFilePath, basePath);
+    config.speedLimitRegionsFilePath = fixPath(config.speedLimitRegionsFilePath, basePath);
+    config.routeFilePath = fixPath(config.routeFilePath, basePath);
+    config.logDirectoryPath = fixPath(config.logDirectoryPath, basePath);
 
     return config;
 }
@@ -268,7 +316,7 @@ int main(int argc, char *argv[])
                 QObject::connect(mUbloxRover.get(), &UbloxRover::gotNmeaGga, &rtcmClient, &RtcmClient::forwardNmeaGgaToServer);
                 QObject::connect(&rtcmClient, &RtcmClient::rtcmData, mUbloxRover.get(), &UbloxRover::writeRtcmToUblox);
                 // QObject::connect(&rtcmClient, &RtcmClient::baseStationPosition, mTruckState.get(), &TruckState::setEnuRef);
-                if (rtcmClient.connectWithInfoFromFile(config.rtcmInfoFile))
+                if (rtcmClient.connectWithInfoFromFile(config.rtcmInfoFilePath))
                     qDebug() << "RtcmClient: connected to" << QString(rtcmClient.getCurrentHost()+ ":" + QString::number(rtcmClient.getCurrentPort()));
                 else
                     qDebug() << "RtcmClient: not connected";
@@ -351,22 +399,30 @@ int main(int argc, char *argv[])
     SimpleWatchdog watchdog;
 
     /* --- Logging of Experiments --- */
+    QString logDirectoryPath;
 
-    // Create the folder
-    QDir documentsDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));   // Documents directory (OS agnostic)
+    if (!config.logDirectoryPath.isEmpty()) {
+        // Use config override
+        logDirectoryPath = config.logDirectoryPath;
+    } else {
+        // Fallback to Documents/PRECISE Experiments
+        QDir documentsDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));
+        logDirectoryPath = documentsDirectory.filePath("PRECISE Experiments");
+    }
+    logDirectoryPath = logDirectoryPath.replace(QRegularExpression("[/\\\\]+$"), "");
 
-    QString folderName = "PRECISE Experiments";
-    QString folderPath = documentsDirectory.filePath(folderName);
-
-    if (!documentsDirectory.exists(folderPath))
-    {
-        if (documentsDirectory.mkpath(folderPath))  qDebug() << "PRECISE Experiments folder created";
-        else                                        qDebug() << "Failed to create PRECISE Experiments folder.";
+    // Ensure folder exists
+    QDir dir;
+    if (!dir.exists(logDirectoryPath)) {
+        if (dir.mkpath(logDirectoryPath))
+            qDebug() << "Created log directory:" << logDirectoryPath;
+        else
+            qWarning() << "Failed to create log directory:" << logDirectoryPath;
     }
 
     // Create the file
     QFile* logFile = new QFile;
-    QString fileName = QString("%1/Log %2.log").arg(folderPath).arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh-mm-ss"));
+    QString fileName = QString("%1/Log %2.log").arg(logDirectoryPath).arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh-mm-ss"));
     logFile->setFileName(fileName);
 
     logFile->open(QIODevice::Append | QIODevice::Text); // Open file in append mode with text handling
@@ -396,6 +452,7 @@ int main(int argc, char *argv[])
         logFile->flush();   // Ensures data is written
     });
     logTimer.start(printInterval_ms);
+    qInfo() << "Logging to:" << QFileInfo(fileName).absoluteFilePath();
 
     /* --- Logging of Experiments END --- */
 
