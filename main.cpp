@@ -26,6 +26,8 @@
 #include "WayWise/vehicles/truckstate.h"
 #include "WayWise/vehicles/trailerstate.h"
 #include "WayWise/routeplanning/routeutils.h"
+#include <QDir>
+#include <QStandardPaths>
 
 static void terminationSignalHandler(int signal) {
     qDebug() << "Shutting down";
@@ -348,13 +350,54 @@ int main(int argc, char *argv[])
     // Watchdog that warns when EventLoop is slowed down
     SimpleWatchdog watchdog;
 
-    // // --- Print speed every second ---
-    // QTimer *speedTimer = new QTimer();
-    // QObject::connect(speedTimer, &QTimer::timeout, [&]() {
-    //     double speed = mTruckState->getSpeed();
-    //     qInfo() << "Speed:" << speed * 3.6 << "kmph";
-    // });
-    // speedTimer->start(1000);
+    /* --- Logging of Experiments --- */
+
+    // Create the folder
+    QDir documentsDirectory(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation));   // Documents directory (OS agnostic)
+
+    QString folderName = "PRECISE Experiments";
+    QString folderPath = documentsDirectory.filePath(folderName);
+
+    if (!documentsDirectory.exists(folderPath))
+    {
+        if (documentsDirectory.mkpath(folderPath))  qDebug() << "PRECISE Experiments folder created";
+        else                                        qDebug() << "Failed to create PRECISE Experiments folder.";
+    }
+
+    // Create the file
+    QFile* logFile = new QFile;
+    QString fileName = QString("%1/Log %2.log").arg(folderPath).arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh-mm-ss"));
+    logFile->setFileName(fileName);
+
+    logFile->open(QIODevice::Append | QIODevice::Text); // Open file in append mode with text handling
+
+    // Create the timer
+    QTimer logTimer;
+    double printInterval_ms = 1000;
+
+    QObject::connect(&logTimer, &QTimer::timeout, [&](){    // Executes on each timeout
+
+        // Parameters to log
+        const double speed = mTruckState->getSpeed();
+        const PosPoint gnssPosition = mTruckState->getPosition(PosType::fused);
+        const PosPoint targetWaypoint = mWaypointFollower->getCurrentGoal();
+
+        QString textToAppend = QString("%1 | Current speed = %2 m/s | GNSS position: Lat = %3 Lon = %4 Yaw = %5 | Target waypoint: X = %6 Y = %7 Speed = %8\n")
+                                   .arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss"))
+                                   .arg(speed)
+                                   .arg(gnssPosition.getX())
+                                   .arg(gnssPosition.getY())
+                                   .arg(gnssPosition.getYaw())
+                                   .arg(targetWaypoint.getX())
+                                   .arg(targetWaypoint.getY())
+                                   .arg(targetWaypoint.getSpeed());
+
+        logFile->write(textToAppend.toLocal8Bit());
+        logFile->flush();   // Ensures data is written
+    });
+    logTimer.start(printInterval_ms);
+
+    /* --- Logging of Experiments END --- */
 
     // Read route and start waypoint follower after 2 seconds
     QTimer::singleShot(2000, [&]() {
@@ -387,6 +430,7 @@ int main(int argc, char *argv[])
     QObject::connect(&app, &QCoreApplication::aboutToQuit, [&](){
         mGNSSReceiver->aboutToShutdown();
         ParameterServer::getInstance()->saveParametersToXmlFile("vehicle_parameters.xml");
+        logFile->close();
     });
     QObject::connect(&mavsdkVehicleServer, &MavsdkVehicleServer::shutdownOrRebootOnboardComputer, [&](bool isShutdown){
         qApp->quit();
