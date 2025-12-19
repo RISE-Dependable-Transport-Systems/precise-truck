@@ -23,7 +23,7 @@
   "speed_limit_regions_file_path": "config/speedLimitRegions.json",
   "enu_ref": "57.7171924432987, 12.962759215969157, 0.0",
   "route_file_path": "config/route.xml",
-  "gnss_simulation_noise_sigma_pos": 1.0,
-  "gnss_simulation_noise_sigma_yaw": 0.02,
+  "gnss_simulation_noise_sigma_pos": 0.01,
+  "gnss_simulation_noise_sigma_yaw": 0.01,
   "log_directory_path": "log"
 }
