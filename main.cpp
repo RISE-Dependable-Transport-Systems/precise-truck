@@ -204,9 +204,9 @@ TruckConfig parseArguments(QCoreApplication &app)
 
     parser.process(app);
 
-    config.configPath = parser.value(configFileOption);
-    if (!config.configPath.isEmpty())
-        config = loadConfigFromJson(config.configPath);
+    auto configPath = parser.value(configFileOption);
+    if (!configPath.isEmpty())
+        config = loadConfigFromJson(configPath);
 
     if (parser.isSet(truckIDOption))
         config.truckId = parser.value(truckIDOption).toInt();
@@ -219,10 +219,23 @@ TruckConfig parseArguments(QCoreApplication &app)
 
     QString basePath = determineBasePath();
 
+    config.configPath = configPath;
     config.rtcmInfoFilePath = fixPath(config.rtcmInfoFilePath, basePath);
     config.speedLimitRegionsFilePath = fixPath(config.speedLimitRegionsFilePath, basePath);
     config.routeFilePath = fixPath(config.routeFilePath, basePath);
     config.logDirectoryPath = fixPath(config.logDirectoryPath, basePath);
+
+    qDebug() << "Truck configuration loaded from:" << config.configPath;
+    qDebug() << "  Truck ID:" << config.truckId;
+    qDebug() << "  Trailer ID:" << config.trailerId;
+    qDebug() << "  Attach trailer:" << (config.attachTrailer ? "Yes" : "No");
+    qDebug() << "  rtcmInfoFilePath:" << config.rtcmInfoFilePath;
+    qDebug() << "  speedLimitRegionsFilePath:" << config.speedLimitRegionsFilePath;
+    qDebug() << "  enuRef:" << config.enuRef;
+    qDebug() << "  routeFilePath:" << config.routeFilePath;
+    qDebug() << "  gnssSimulationNoiseSigmaPos:" << config.gnssSimulationNoiseSigmaPos;
+    qDebug() << "  gnssSimulationNoiseSigmaYaw:" << config.gnssSimulationNoiseSigmaYaw;
+    qDebug() << "  logDirectoryPath:" << config.logDirectoryPath;
 
     return config;
 }
@@ -486,7 +499,7 @@ int main(int argc, char *argv[])
     signal(SIGINT, terminationSignalHandler);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, [&](){
         mGNSSReceiver->aboutToShutdown();
-        ParameterServer::getInstance()->saveParametersToXmlFile("vehicle_parameters.xml");
+        // ParameterServer::getInstance()->saveParametersToXmlFile("vehicle_parameters.xml");
         logFile->close();
     });
     QObject::connect(&mavsdkVehicleServer, &MavsdkVehicleServer::shutdownOrRebootOnboardComputer, [&](bool isShutdown){
