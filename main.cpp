@@ -43,24 +43,44 @@ static std::mt19937 rng{12345};
 
 auto gaussianGnssPerturbationFn =
 [](QTime simTime,
-   QSharedPointer<VehicleState> vehicleState,
+   QSharedPointer<ObjectState> objectState,
    std::normal_distribution<double>& noise_pos,
    std::normal_distribution<double>& noise_yaw,
    std::mt19937& rng)
 {
     Q_UNUSED(simTime);
-    PosPoint gnssPosition = vehicleState->getPosition(PosType::GNSS);
+    static PosPoint lastOdomPosPoint;
+    PosPoint gnssPosPoint = objectState->getPosition(PosType::GNSS);
+    PosPoint odomPosPoint = objectState->getPosition(PosType::odom);
 
-    double dx = noise_pos(rng);
-    double dy = noise_pos(rng);
-    double dyaw = noise_yaw(rng);
+    double deltaX = odomPosPoint.getX() - lastOdomPosPoint.getX() + noise_pos(rng);
+    double deltaY = odomPosPoint.getY() - lastOdomPosPoint.getY() + noise_pos(rng);
+    double deltaYaw = odomPosPoint.getYaw() - lastOdomPosPoint.getYaw() + noise_yaw(rng);
+    gnssPosPoint.setX(gnssPosPoint.getX() + deltaX);
+    gnssPosPoint.setY(gnssPosPoint.getY() + deltaY);
+    double yawResult = gnssPosPoint.getYaw() + deltaYaw;
 
-    gnssPosition.setX(gnssPosition.getX() + dx);
-    gnssPosition.setY(gnssPosition.getY() + dy);
-    gnssPosition.setYaw(gnssPosition.getYaw() + dyaw);
+    while (yawResult < -180.0)
+        yawResult += 360.0;
+    while (yawResult >= 180.0)
+        yawResult -= 360.0;
 
-    vehicleState->setPosition(gnssPosition);
-    return true;
+    gnssPosPoint.setYaw(yawResult);
+    gnssPosPoint.setTime(odomPosPoint.getTime());
+    objectState->setPosition(gnssPosPoint);
+
+    GnssFixStatus gnssFixStatus;
+    gnssFixStatus.isFusedOnChip = true;
+    gnssFixStatus.fixType = GNSS_FIX_TYPE::FIX_3D;
+    gnssFixStatus.horizontalAccuracy = 0.0;
+    gnssFixStatus.verticalAccuracy = 0.0;
+    gnssFixStatus.headingAccuracy = 0.0;
+    gnssFixStatus.lastRtcmCorrectionAge = 0;
+    gnssFixStatus.numSatellites = 0;
+
+    lastOdomPosPoint = odomPosPoint;
+
+    return gnssFixStatus;
 };
 
 // Get executable directory
@@ -277,6 +297,7 @@ int main(int argc, char *argv[])
     }
 
     MavsdkVehicleServer mavsdkVehicleServer(mTruckState, QHostAddress(config.controlTowerIP), config.controlTowerPort);
+    mavsdkVehicleServer.setTransferLogs(false);
 
     // --- Lower-level control setup ---
     QSharedPointer<CarMovementController> mCarMovementController(new CarMovementController(mTruckState));
@@ -319,7 +340,7 @@ int main(int argc, char *argv[])
                 qDebug() << "UbloxRover connected to:" << portInfo.systemLocation();
 
                 mUbloxRover->setChipOrientationOffset(0.0, 0.0, 0.0);
-                QObject::connect(mUbloxRover.get(), &UbloxRover::updatedGNSSPositionAndYaw, &positionFuser, &SDVPVehiclePositionFuser::correctPositionAndYawGNSS);
+                QObject::connect(mUbloxRover.get(), &UbloxRover::updatedGNSSPositionAndOrientation, &positionFuser, &SDVPVehiclePositionFuser::correctPositionAndYawGNSS);
 
                 mUbloxRover->setReceiverVariant(RECEIVER_VARIANT::UBLX_ZED_F9R); // or UBLX_ZED_F9P
                 mavsdkVehicleServer.setUbloxRover(mUbloxRover);
@@ -345,23 +366,24 @@ int main(int argc, char *argv[])
         mGNSSReceiver->setReceiverVariant(RECEIVER_VARIANT::WAYWISE_SIMULATED);
         mGNSSReceiver->setReceiverState(RECEIVER_STATE::READY);
 
-        QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, [&](QSharedPointer<VehicleState> vehicleState, double distanceDriven){
-            bool fused;
+        QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, [&](QSharedPointer<ObjectState> objectState, double distanceDriven){
+            Q_UNUSED(objectState);
+            Q_UNUSED(distanceDriven);
             if (config.gnssSimulationNoiseSigmaPos != 0.0 || config.gnssSimulationNoiseSigmaYaw != 0.0) {
                 static std::normal_distribution<double> noise_pos(0.0, config.gnssSimulationNoiseSigmaPos);
                 static std::normal_distribution<double> noise_yaw(0.0, config.gnssSimulationNoiseSigmaYaw);
 
-                fused = mGNSSReceiver->simulationStep(
-                    [=](QTime simTime, QSharedPointer<VehicleState> vehicleState) mutable -> bool
+                mGNSSReceiver->simulationStep(
+                    [=](QTime simTime_, QSharedPointer<ObjectState> objectState_) mutable -> GnssFixStatus
                     {
-                        return gaussianGnssPerturbationFn(simTime, vehicleState, noise_pos, noise_yaw, rng);
+                        return gaussianGnssPerturbationFn(simTime_, objectState_, noise_pos, noise_yaw, rng);
                     }
                 );
             } else {
-                fused = mGNSSReceiver->simulationStep();
+                mGNSSReceiver->simulationStep();
             }
-            positionFuser.correctPositionAndYawGNSS(vehicleState, distanceDriven, fused);
         });
+        QObject::connect(mGNSSReceiver.get(), &GNSSReceiver::updatedGNSSPositionAndOrientation, &positionFuser, &SDVPVehiclePositionFuser::correctPositionAndYawGNSS);
     }
 
     // IMU
