@@ -469,7 +469,7 @@ int main(int argc, char *argv[])
         const PosPoint gnssPosition = mTruckState->getPosition(PosType::fused);
         const PosPoint targetWaypoint = mWaypointFollower->getCurrentGoal();
 
-        QString textToAppend = QString("%1 | Current speed = %2 m/s | GNSS position: Lat = %3 Lon = %4 Yaw = %5 | Target waypoint: X = %6 Y = %7 Speed = %8\n")
+        QString textToAppend = QString("%1 | Current speed = %2 m/s | GNSS position: X = %3 Y = %4 Yaw = %5 | Target waypoint: X = %6 Y = %7 Speed = %8\n")
                                    .arg(QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss"))
                                    .arg(speed)
                                    .arg(gnssPosition.getX())
