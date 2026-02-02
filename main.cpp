@@ -369,19 +369,15 @@ int main(int argc, char *argv[])
         QObject::connect(mCarMovementController.get(), &CarMovementController::updatedOdomPositionAndYaw, [&](QSharedPointer<ObjectState> objectState, double distanceDriven){
             Q_UNUSED(objectState);
             Q_UNUSED(distanceDriven);
-            if (config.gnssSimulationNoiseSigmaPos != 0.0 || config.gnssSimulationNoiseSigmaYaw != 0.0) {
-                static std::normal_distribution<double> noise_pos(0.0, config.gnssSimulationNoiseSigmaPos);
-                static std::normal_distribution<double> noise_yaw(0.0, config.gnssSimulationNoiseSigmaYaw);
+            static std::normal_distribution<double> noise_pos(0.0, config.gnssSimulationNoiseSigmaPos);
+            static std::normal_distribution<double> noise_yaw(0.0, config.gnssSimulationNoiseSigmaYaw);
 
-                mGNSSReceiver->simulationStep(
-                    [=](QTime simTime_, QSharedPointer<ObjectState> objectState_) mutable -> GnssFixStatus
-                    {
-                        return gaussianGnssPerturbationFn(simTime_, objectState_, noise_pos, noise_yaw, rng);
-                    }
-                );
-            } else {
-                mGNSSReceiver->simulationStep();
-            }
+            mGNSSReceiver->simulationStep(
+                [=](QTime simTime_, QSharedPointer<ObjectState> objectState_) mutable -> GnssFixStatus
+                {
+                    return gaussianGnssPerturbationFn(simTime_, objectState_, noise_pos, noise_yaw, rng);
+                }
+            );
         });
         QObject::connect(mGNSSReceiver.get(), &GNSSReceiver::updatedGNSSPositionAndOrientation, &positionFuser, &SDVPVehiclePositionFuser::correctPositionAndYawGNSS);
     }
